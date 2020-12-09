@@ -1,9 +1,9 @@
 function CConfig(){
   this.init();
 }
-var zabbixVersion = "3.4"
+var zabbixVersion = "4.4"
 var methods = {
-  "4.0": [
+  "4.4": [
     "action.create",
     "action.delete",
     "action.get",
@@ -85,6 +85,7 @@ var methods = {
     "itemprototype.delete",
     "itemprototype.get",
     "itemprototype.update",
+    "script.get",
     "service.adddependencies",
     "service.addtimes",
     "service.create",
@@ -772,7 +773,7 @@ var methods = {
     "usergroup.create",
     "usergroup.delete",
     "usergroup.get",
-    "usergroup.isreadable",
+    // "usergroup.isreadable",
     "usergroup.iswritable",
     "usergroup.massadd",
     "usergroup.massupdate",
@@ -798,305 +799,306 @@ var methods = {
 };
 
 CConfig.prototype = {
-	connections: {},
-	host: '',
-	login: '',
-	password: '',
-	auth: '',
-	ace: {},
+  connections: {},
+  host: '',
+  login: '',
+  password: '',
+  auth: '',
+  ace: {},
 
-	init: function(){
-		this.connections = JSON.parse(localStorage.getItem('connections')) || {};
+  init: function(){
+    this.connections = JSON.parse(localStorage.getItem('connections')) || {};
+    this.ace = ace.edit("apiparams");
+    this.ace.getSession().setMode("ace/mode/json");
 
-		this.ace = ace.edit("apiparams");
-		this.ace.getSession().setMode("ace/mode/json");
+    var that = this;
+    $('#host').on('change',function(){ that.host = this.value; });
+    $('#login').on('change',function(){ that.login = this.value; });
+    $('#password').on('change',function(){ that.password = this.value; });
+    $('#connAdd').on('click',function(){ that.addConnection(); });
+    $('#connList').on('change',function(){ that.loadConnection($('#connList').val()); });
+    $('#connRemove').on('click',function(){ that.removeConnection(); });
+    this.syncConnectionsList();
+  },
 
-		var that = this;
-		$('#host').change(function(){
-			that.host = this.value;
-		});
-		$('#login').change(function(){
-			that.login = this.value;
-		});
-		$('#password').change(function(){
-			that.password = this.value;
-		});
-		$('#connAdd').click(function(){
-			that.addConnection();
-		});
-		$('#connList').change(function(){
-			that.loadConnection($('#connList').val());
-		});
-		$('#connRemove').click(function(){
-			that.removeConnection();
-		});
-		this.syncConnectionsList();
-	},
-
-	addConnection: function(){
-		this.connections[this.host] = {
-			host: this.host,
-			login: this.login,
-			password: this.password
-		};
-		localStorage.setItem('connections', JSON.stringify(this.connections));
-
-		this.syncConnectionsList();
-	},
-	removeConnection: function(){
-		delete this.connections[$('#connList').val()];
-
-		localStorage.setItem('connections', JSON.stringify(this.connections));
-
-		this.syncConnectionsList();
-	},
-	loadConnection: function(host){
-		this.host = this.connections[host].host;
-		this.login = this.connections[host].login;
-		this.password = this.connections[host].password;
-
-		this.syncConnectionsConfig();
-	},
-
-	syncConnectionsList: function(){
-		$('#connList').empty();
-		for(var key in this.connections){
-			$('#connList').append(new Option(this.connections[key].host, this.connections[key].host));
-		}
-	},
-	syncConnectionsConfig: function(){
-		$('#host').val(this.host);
-		$('#login').val(this.login);
-		$('#password').val(this.password);
-	}
+  addConnection: function(){
+    this.connections[this.host] = {
+      host: this.host,
+      login: this.login,
+      password: this.password
+    };
+    localStorage.setItem('connections', JSON.stringify(this.connections));
+    this.syncConnectionsList();
+  },
+  removeConnection: function(){
+    delete this.connections[$('#connList').val()];
+    localStorage.setItem('connections', JSON.stringify(this.connections));
+    this.syncConnectionsList();
+  },
+  loadConnection: function(host){
+    this.host = this.connections[host].host;
+    this.login = this.connections[host].login;
+    this.password = this.connections[host].password;
+    this.syncConnectionsConfig();
+  },
+  syncConnectionsList: function(){
+    $('#connList').empty();
+    for(var key in this.connections){
+      $('#connList').append(new Option(this.connections[key].host, this.connections[key].host));
+    }
+  },
+  syncConnectionsConfig: function(){
+    $('#host').val(this.host);
+    $('#login').val(this.login);
+    $('#password').val(this.password);
+  }
 };
 
+var IgnoreEmpty = "true";
+var FormatRequest = "false";
+
 $(document).ready(function() {
+
+  $('#showEmpty').on('click', function() {
+    if (IgnoreEmpty == true) {
+      IgnoreEmpty = false;
+      $('#showEmpty').text("Hide empty JSON keys").removeClass('btn-primary').addClass('btn-success');
+      $('#execute').click();
+    } else {
+      IgnoreEmpty = true;
+      $('#showEmpty').text("Show empty JSON keys").removeClass('btn-success').addClass('btn-primary');
+      $('#execute').click();
+    }
+  });
+
+  $('#requestFormat').on('click', function() {
+    if (FormatRequest == true) {
+      FormatRequest = false;
+      $('#requestFormat').text("JSON format request").removeClass('btn-primary').addClass('btn-success');
+      $('#execute').click();
+    } else {
+      FormatRequest = true;
+      $('#requestFormat').text("RAW format request").removeClass('btn-success').addClass('btn-primary');
+      $('#execute').click();
+    }
+  });
+
+  if (location.protocol == "http:") {
+   $('#httpsli').show();
+  }
+
+  new ClipboardJS('.btncpy');
+
+  $('#https').on('click',function() {
     if (location.protocol == "http:") {
-       $('#httpsli').show();
+      $('#https').attr("href", "https://" + window.location.host + window.location.pathname);
+    } else {
+      return false;
     }
+  });
 
-    new Clipboard('.btncpy');
-
-    $('#https').click(function() {
-       if (location.protocol == "http:") {
-         $('#https').attr("href", "https://" + window.location.host + window.location.pathname);
-       } else {
-         return false;
-       }
-    });
-    
-    $('#loadMe').click(function (e) {
+  $('#loadMe').on('click',function (e) {
     if ($('#load').css('display') == 'none') {
-        var docUrl = "https://www.zabbix.com/documentation/" + zabbixVersion + "/manual/api/reference/" + $('#apimethod').val().replace('.','/')
-        if ($("#load").attr("src") != docUrl) {
-            $("#load").attr("src", docUrl);
-        }
-        $('#load').show();
+      var docUrl = "https://www.zabbix.com/documentation/" + zabbixVersion + "/manual/api/reference/" + $('#apimethod').val().replace('.','/')
+      if ($("#load").attr("src") != docUrl) {
+        $("#load").attr("src", docUrl);
+      }
+      $('#load').show();
     } else {
-       $('#load').hide();
+      $('#load').hide();
     }
-    });
+  });
 
-	config = new CConfig();
-	ace = config.ace;
+  config = new CConfig();
+  ace = config.ace;
 
-	$('#saveRequest').click(function() {
-		$('#saveRequestMethod').val($('#apimethod').val());
-		$('#saveRequestParams').val(ace.getValue());
-	});
+  $('#saveRequest').on('click',function() {
+    $('#saveRequestMethod').val($('#apimethod').val());
+    $('#saveRequestParams').val(ace.getValue());
+  });
 
-	$('#saveRequestOk').click(function() {
-		var request = {
-				name: $('#saveRequestName').val(),
-				method: $('#saveRequestMethod').val(),
-				params: $('#saveRequestParams').val()
-			},
-			requests = JSON.parse(localStorage.getItem('requests')) || {};
+  $('#saveRequestOk').on('click',function() {
+    var request = {
+      name: $('#saveRequestName').val(),
+      method: $('#saveRequestMethod').val(),
+      params: $('#saveRequestParams').val()
+    },
+    requests = JSON.parse(localStorage.getItem('requests')) || {};
+    requests[request.name] = request;
+    localStorage.setItem('requests', JSON.stringify(requests));
+    $('#saveRequestModal').modal('hide');
+  });
 
-		requests[request.name] = request;
-
-		localStorage.setItem('requests', JSON.stringify(requests));
-
-		$('#saveRequestModal').modal('hide');
-	});
-
-
-	$('#loadRequest').click(function() {
-		var requests = JSON.parse(localStorage.getItem('requests')) || {};
-		$('#savedRequests').empty();
-		for (var name in requests) {
-			$('#savedRequests').append(new Option(name, name));
-		}
-	});
-
-	$('#loadRequestOk').click(function() {
-		var request,
-			requests = JSON.parse(localStorage.getItem('requests')) || {};
-
-		if ($('#savedRequests').val()) {
-			request = requests[$('#savedRequests').val()];
-			$('#apimethod').val(request.method);
-			$('#apiparams').val(request.params);
-		}
-
-		$('#loadRequestModal').modal('hide');
-	});
-
-	$('#removeSavedRequest').click(function() {
-		var requests = JSON.parse(localStorage.getItem('requests')) || {};
-
-		delete requests[$('#savedRequests').val()];
-		localStorage.setItem('requests', JSON.stringify(requests));
-
-		$('#savedRequests').empty();
-		for(var name in requests){
-			$('#savedRequests').append(new Option(name, name));
-		}
-	});
-
-
-	$('#loginButton').click(function() {
-		jsonRpc.connect(config.host, config.login, config.password);
-	});
-
-	$('#execute').click(function() {
-        testOnly();
-        paramsUpdate();
-		var params;
-		try {
-			params = ace.getValue();
-			if (params !== '') {
-				params = JSON.parse(ace.getValue());
-			}
-			jsonRpc.call($('#apimethod').val(), params);
-		}
-		catch(e) {
-			//alert(e);
-		}
-	});
-
-    function testOnly(){
-        if (ace.getValue() == '') {
-            $('#apiparams').parent().removeClass('error');
-            $('#testResult').hide();
-            return true;
-        }
-        lint = window.JSONLint( ace.getValue(), { comments: false } );
-
-        if ( ! lint.error ) {
-			$('#apiparams').parent().removeClass('error');
-            $('#testResult').hide();
-		}
-		else {
-			$('#apiparams').parent().addClass('error');
-            $('#response, #request').empty();
-            $('#responsetime').text("");
-            $('#testResult').show();
-            $('#testResult').html([
-				lint.error + "<br>" +
-				"<b>Evidence:</b> " + lint.evidence + "<br>" +
-				"<b>Line:</b> " + lint.line + "<br>" +
-				"<b>Character:</b> " + lint.character
-			].join(''));
-		}
+  $('#loadRequest').on('click',function() {
+    var requests = JSON.parse(localStorage.getItem('requests')) || {};
+    $('#savedRequests').empty();
+    for (var name in requests) {
+      $('#savedRequests').append(new Option(name, name));
     }
+  });
 
-    function paramsUpdate() {
-        location.hash = 'apimethod=' + encodeURIComponent($('#apimethod').val()) + '&apiparams=' + encodeURIComponent(ace.getValue());
+  $('#loadRequestOk').on('click',function() {
+    var request,
+      requests = JSON.parse(localStorage.getItem('requests')) || {};
+    if ($('#savedRequests').val()) {
+      request = requests[$('#savedRequests').val()];
+      $('#apimethod').val(request.method);
+      $('#apiparams').val(request.params);
     }
+    $('#loadRequestModal').modal('hide');
+  });
 
-    $('#compressJSON').click(function(){
-        var params;
+  $('#removeSavedRequest').on('click',function() {
+    var requests = JSON.parse(localStorage.getItem('requests')) || {};
+    delete requests[$('#savedRequests').val()];
+    localStorage.setItem('requests', JSON.stringify(requests));
+    $('#savedRequests').empty();
+    for(var name in requests){
+      $('#savedRequests').append(new Option(name, name));
+    }
+  });
+
+  $('#loginButton').on('click',function() {
+    jsonRpc.connect(config.host, config.login, config.password);
+  });
+
+  $('#execute').on('click',function() {
+    testOnly();
+    paramsUpdate();
+    var params;
+    try {
+      params = ace.getValue();
+      if (params !== '') {
         params = JSON.parse(ace.getValue());
-        ace.setValue(JSON.stringify(params, null, null));
-        paramsUpdate();
-    });
-
-	$('#formatJSON').click(function(){
-		var params;
-        if (ace.getValue() == '') {
-            $('#apiparams').parent().removeClass('error');
-            $('#testResult').hide();
-            return true;
-        }
-        lint = window.JSONLint( ace.getValue(), { comments: false } );
-        if ( ! lint.error ) {
-			$('#apiparams').parent().removeClass('error');
-            $('#response, #request').empty();
-            $('#responsetime').text("");
-            $('#testResult').hide();
-    	    try {
-                params = JSON.parse(ace.getValue());
-                ace.setValue(JSON.stringify(params, null, 4));
-                paramsUpdate();
-    		}
-    		catch(e) {
-    			alert(e);
-    		}
-		}
-		else {
-			$('#apiparams').parent().addClass('error');
-            $('#testResult').show();
-            $('#testResult').html([
-				lint.error + "<br>" +
-				"<b>Evidence:</b> " + lint.evidence + "<br>" +
-				"<b>Line:</b> " + lint.line + "<br>" +
-				"<b>Character:</b> " + lint.character
-			].join(''));
-		}
-	});
-
-    if (location.hash.length) {
-        var prms = getHashParams();
-        if ('apimethod' in prms) {
-            $('#apimethod').val(prms['apimethod']);
-        }
-        if ('apiparams' in prms) {
-            ace.setValue(prms['apiparams']);
-        }
+      }
+      jsonRpc.call($('#apimethod').val(), params);
     }
-    
-    if (methods[zabbixVersion].indexOf($('#apimethod').val()) > -1 ) {
-        $('#loadMe').removeClass('disabled');
+    catch(e) {
+      alert(e);
+    }
+    paramsUpdate();
+  });
+
+  function testOnly(){
+    if (ace.getValue() == '') {
+      $('#apiparams').parent().removeClass('error');
+      $('#testResult').hide();
+      return true;
+    }
+    lint = window.JSONLint( ace.getValue(), { comments: false } );
+    if ( ! lint.error ) {
+      $('#apiparams').parent().removeClass('error');
+      $('#testResult').hide();
     } else {
-        $('#loadMe').addClass('disabled');
-    }    
+      $('#apiparams').parent().addClass('error');
+      $('#response, #request').empty();
+      $('#responsetime').text("");
+      $('#testResult').show();
+      $('#testResult').html([
+        lint.error + "<br>" +
+        "<b>Evidence:</b> " + lint.evidence + "<br>" +
+        "<b>Line:</b> " + lint.line + "<br>" +
+        "<b>Character:</b> " + lint.character
+      ].join(''));
+    }
+  }
+
+  function paramsUpdate() {
+    location.hash = 'apimethod=' + encodeURIComponent($('#apimethod').val()) + '&apiparams=' + encodeURIComponent(ace.getValue());
+  }
+
+  $('#compressJSON').on('click',function(){
+    var params;
+    params = JSON.parse(ace.getValue());
+    ace.setValue(JSON.stringify(params, null, null));
+    paramsUpdate();
+  });
+
+  $('#formatJSON').on('click',function(){
+    var params;
+    if (ace.getValue() == '') {
+      $('#apiparams').parent().removeClass('error');
+      $('#testResult').hide();
+      return true;
+    }
+    lint = window.JSONLint( ace.getValue(), { comments: false } );
+    if ( ! lint.error ) {
+      $('#apiparams').parent().removeClass('error');
+      $('#response, #request').empty();
+      $('#responsetime').text("");
+      $('#testResult').hide();
+      try {
+        params = JSON.parse(ace.getValue());
+        ace.setValue(JSON.stringify(params, null, 4));
+        paramsUpdate();
+      }
+      catch(e) {
+        alert(e);
+      }
+    }
+    else {
+      $('#apiparams').parent().addClass('error');
+      $('#testResult').show();
+      $('#testResult').html([
+        lint.error + "<br>" +
+        "<b>Evidence:</b> " + lint.evidence + "<br>" +
+        "<b>Line:</b> " + lint.line + "<br>" +
+        "<b>Character:</b> " + lint.character
+      ].join(''));
+    }
+  });
+
+  if (location.hash.length) {
+    var prms = getHashParams();
+    if ('apimethod' in prms) {
+      $('#apimethod').val(prms['apimethod']);
+    }
+    if ('apiparams' in prms) {
+      ace.setValue(prms['apiparams']);
+    }
+  }
+
+  if (methods[zabbixVersion].indexOf($('#apimethod').val()) > -1 ) {
+    $('#loadMe').removeClass('disabled');
+  } else {
+    $('#loadMe').addClass('disabled');
+  }
 });
 
+// the following functions are only typeahead routines //
 $(document).on('search keyup change typeahead:selected typeahead:autocompleted', '#apimethod', function () {
-    var prms = getHashParams();
-    var hash = '';
-    delete prms['apimethod'];
-    $.each( prms, function( key, value ) {
-        hash = key + "=" + encodeURIComponent(value) + '&';
-    });
-    location.hash = 'apimethod=' + encodeURIComponent($(this).val()) + '&' + hash;
-    if (methods[zabbixVersion].indexOf($(this).val()) > -1 ) {
-        $('#loadMe').removeClass('disabled');
-    } else {
-        $('#loadMe').addClass('disabled');
-    }
+  var prms = getHashParams();
+  var hash = '';
+  delete prms['apimethod'];
+  $.each( prms, function( key, value ) {
+    hash = key + "=" + encodeURIComponent(value) + '&';
+  });
+  location.hash = 'apimethod=' + encodeURIComponent($(this).val()) + '&' + hash;
+  if (methods[zabbixVersion].indexOf($(this).val()) > -1 ) {
+    $('#loadMe').removeClass('disabled');
+  } else {
+    $('#loadMe').addClass('disabled');
+  }
 })
 
 $(document).on('search keyup change', '#apiparams', function () {
-    var prms = getHashParams();
-    var hash = '';
-    delete prms['apiparams'];
-    $.each( prms, function( key, value ) {
-        hash = key + "=" + encodeURIComponent(value) + '&';
-    });
-    location.hash = hash + 'apiparams=' + encodeURIComponent($(this).val().replace("\\","\\\\"));
+  var prms = getHashParams();
+  var hash = '';
+  delete prms['apiparams'];
+  $.each( prms, function( key, value ) {
+    hash = key + "=" + encodeURIComponent(value) + '&';
+  });
+  location.hash = hash + 'apiparams=' + encodeURIComponent($(this).val().replace("\\","\\\\"));
 })
 
 function getHashParams() {
-    var hashParams = {};
-    var e,
-        a = /\+/g,  //Regex for replacing addition symbol with a space
-        r = /([^&;=]+)=?([^&;]*)/g,
-        d = function (s) { return decodeURIComponent(s.replace(a, " ")); },
-        q = window.location.hash.substring(1);
-    while (e = r.exec(q))
-       hashParams[d(e[1])] = d(e[2]);
-    return hashParams;
+  var hashParams = {};
+  var e,
+    a = /\+/g,  //Regex for replacing addition symbol with a space
+    r = /([^&;=]+)=?([^&;]*)/g,
+    d = function (s) { return decodeURIComponent(s.replace(a, " ")); },
+    q = window.location.hash.substring(1);
+  while (e = r.exec(q))
+  hashParams[d(e[1])] = d(e[2]);
+  return hashParams;
 }
